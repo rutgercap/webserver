@@ -25,8 +25,8 @@ static bool isCgiRequest(std::string path) {
 }
 
 HttpResponse GetRequest::constructResponse(const Server &server) {
-  Route const &routeOfResponse = server.getRoute(HttpRequest::_uri);
-  const std::string path = _constructPath(routeOfResponse.rootDirectory);
+  Route const      &routeOfResponse = server.getRoute(HttpRequest::_uri);
+  const std::string path            = _constructPath(routeOfResponse.rootDirectory);
 
   if (_isMethodAllowed(routeOfResponse.allowedMethods) == false) {
     return HttpResponse(HTTPStatusCode::METHOD_NOT_ALLOWED);
@@ -38,33 +38,33 @@ HttpResponse GetRequest::constructResponse(const Server &server) {
   return _handleFileRequest(path, routeOfResponse);
 }
 
-HttpResponse GetRequest::_handleCgiRequest(std::string const &path,
-                                           Route const &route) const {
+HttpResponse GetRequest::_handleCgiRequest(std::string const &path, Route const &route) const {
   std::vector<std::string> headers;
-  std::string body;
+  std::string              body;
 
-  HTTPStatusCode status = CGI::executeFile(&body, &headers, path, "");
+  HTTPStatusCode           status = CGI::executeFile(&body, &headers, path, "");
   if (status != HTTPStatusCode::OK) {
     return _errorResponseWithFile(status, route);
   }
 }
 
-HttpResponse GetRequest::_handleFileRequest(std::string const &path,
-                                            Route const &route) const {
+HttpResponse GetRequest::_handleFileRequest(std::string const &path, Route const &route) const {
   switch (_getFileType(path)) {
     case FileType::IS_DIR: {
       if (_typeIsAccepted() == false) {
         return _errorResponseWithFile(HTTPStatusCode::NOT_ACCEPTABLE, route);
       }
-      std::vector<std::string> possible_paths =
-          _getPossiblePaths(path, route.indexFiles);
-      for (std::vector<std::string>::const_iterator it = possible_paths.begin();
-           it != possible_paths.end(); ++it) {
+      std::vector<std::string> possible_paths = _getPossiblePaths(path, route.indexFiles);
+      for (std::vector<std::string>::const_iterator it = possible_paths.begin(); it != possible_paths.end(); ++it) {
         if (_getFileType(*it) == FileType::IS_REG_FILE) {
           return _responseWithFile(*it, HTTPStatusCode::OK);
         }
       }
-      return HttpResponse(HTTPStatusCode::NOT_FOUND);
+      if (route.autoIndex == true) {
+        return _responseWithAutoIndex(path);
+      } else {
+        return _errorResponseWithFile(HTTPStatusCode::FORBIDDEN, route);
+      }
     }
     case FileType::IS_REG_FILE: {
       if (_typeIsAccepted() == false) {
@@ -76,10 +76,38 @@ HttpResponse GetRequest::_handleFileRequest(std::string const &path,
       return _errorResponseWithFile(HTTPStatusCode::NOT_FOUND, route);
     }
     default: {
-      return _errorResponseWithFile(HTTPStatusCode::INTERNAL_SERVER_ERROR,
-                                    route);
+      return _errorResponseWithFile(HTTPStatusCode::INTERNAL_SERVER_ERROR, route);
     }
   }
+}
+
+#include "dirent.h"
+
+HttpResponse GetRequest::_responseWithAutoIndex(std::string const &path) const {
+  HttpResponse response(HTTPStatusCode::OK);
+  std::string  body;
+  DIR *        dir;
+  struct dirent *ent;
+
+  body += "<!DOCTYPE html><html><head><title>Index of " + path + "</title></head><body><h1>Index of " + path + "</h1><table>";
+  body += "<tr><th>Name</th></tr>"; // can add more columns here
+
+  if ((dir = opendir(path.c_str())) != NULL) {
+    while ((ent = readdir(dir)) != NULL) {
+      // convert dir to string
+
+      body += "<tr><td><a href=\"" + std::string(ent->d_name) + "/index.html" + "\">" + std::string(ent->d_name) + "</a></td></tr>";
+    }
+    closedir(dir);
+  } else {
+    return HttpResponse(HTTPStatusCode::INTERNAL_SERVER_ERROR);
+  }
+
+  body += "</table></body></html>";
+  response.setBody(body);
+  response.setHeader("Content-Type", "text/html");
+  response.setHeader("Content-Length", std::to_string(body.length()));
+  return response;
 }
 
 static std::string getFileSize(std::ifstream &file) {
@@ -94,8 +122,7 @@ static std::string getFileSize(std::ifstream &file) {
 static std::string fileToStr(std::ifstream &file) {
   file.seekg(0, std::ios::beg);
 
-  std::string body((std::istreambuf_iterator<char>(file)),
-                   std::istreambuf_iterator<char>());
+  std::string body((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
   return body;
 }
 
@@ -107,10 +134,10 @@ static std::string fileToStr(std::ifstream &file) {
 static std::string getContentType(const std::string &path) {
   std::map<std::string, std::string> file_types;
 
-  file_types["html"] = "text/html";
-  file_types["css"] = "text/css";
-  file_types["js"] = "application/javascript";
-  file_types["png"] = "image/png";
+  file_types["html"]         = "text/html";
+  file_types["css"]          = "text/css";
+  file_types["js"]           = "application/javascript";
+  file_types["png"]          = "image/png";
 
   std::string file_extension = path.substr(path.find_last_of(".") + 1);
   if (file_types.find(file_extension) != file_types.end()) {
@@ -119,28 +146,33 @@ static std::string getContentType(const std::string &path) {
   return "text/plain";
 }
 
-HttpResponse GetRequest::_errorResponseWithFile(
-    HTTPStatusCode const &statusCode, Route const &route) const {
+HttpResponse GetRequest::_errorResponseWithFile(HTTPStatusCode const &statusCode, Route const &route) const {
   std::string pathToErrorFile = _getErrorPageIndex(route, statusCode);
   return _responseWithFile(pathToErrorFile, statusCode);
 }
 
-HttpResponse GetRequest::_responseWithFile(std::string const &path,
-                                           HTTPStatusCode statusCode) const {
+HttpResponse GetRequest::_responseWithFile(std::string const &path, HTTPStatusCode statusCode) const {
   std::ifstream file(path.c_str());
   if (!file.is_open()) {
     return HttpResponse(HTTPStatusCode::INTERNAL_SERVER_ERROR);
   }
   HttpResponse response(statusCode);
-  std::string test = fileToStr(file);
+  std::string  test = fileToStr(file);
   response.setBody(fileToStr(file));
   response.setHeader("Content-Length", getFileSize(file));
   response.setHeader("Content-Type", getContentType(path));
   return response;
 }
 
-HttpResponse GetRequest::_responseWithBody(
-    std::map<std::string, std::string> headers, std::string body) const {}
+HttpResponse GetRequest::_responseWithBody(const std::map<std::string, std::string> &headers,
+                                           const std::string                        &body) const {
+  HttpResponse response(HTTPStatusCode::OK);
+  response.setBody(body);
+  for (std::map<std::string, std::string>::const_iterator it = headers.begin(); it != headers.end(); ++it) {
+    response.setHeader(it->first, it->second);
+  }
+  return response;
+}
 
 bool GetRequest::_typeIsAccepted() const {
   // TYPES_TO_ACCEPT is a vector of strings that contains all the types that the server can accept
@@ -151,7 +183,7 @@ bool GetRequest::_typeIsAccepted() const {
   if (ACCEPT_HEADER.empty() || ACCEPT_HEADER.find("*/*") != std::string::npos) {
     return true;
   } else {
-    std::size_t pos = 0;
+    std::size_t pos  = 0;
     std::size_t prev = 0;
     while ((pos = ACCEPT_HEADER.find(',', prev)) != std::string::npos) {
       acceptedTypes.push_back(ACCEPT_HEADER.substr(prev, pos - prev));
@@ -160,10 +192,8 @@ bool GetRequest::_typeIsAccepted() const {
     acceptedTypes.push_back(ACCEPT_HEADER.substr(prev));
   }
 
-  for (std::vector<std::string>::const_iterator it = acceptedTypes.begin();
-       it != acceptedTypes.end(); ++it) {
-    for (std::vector<std::string>::const_iterator it2 = TYPES_TO_ACCEPT.begin();
-         it2 != TYPES_TO_ACCEPT.end(); ++it2) {
+  for (std::vector<std::string>::const_iterator it = acceptedTypes.begin(); it != acceptedTypes.end(); ++it) {
+    for (std::vector<std::string>::const_iterator it2 = TYPES_TO_ACCEPT.begin(); it2 != TYPES_TO_ACCEPT.end(); ++it2) {
       if (*it == *it2) {
         return true;
       }
@@ -172,24 +202,21 @@ bool GetRequest::_typeIsAccepted() const {
   return false;
 }
 
-std::string GetRequest::_getErrorPageIndex(const Route &route,
-                                           HTTPStatusCode errorCode) const {
+std::string GetRequest::_getErrorPageIndex(const Route &route, HTTPStatusCode errorCode) const {
   if (route.errorPages.find(errorCode) != route.errorPages.end()) {
     std::string page = route.errorPages.at(errorCode);
-    if (_getFileType(page) == FileType::IS_REG_FILE) {
-      return route.rootDirectory + page;
+    if (_getFileType(route.rootDirectory + "/" + page) == FileType::IS_REG_FILE) {
+      return route.rootDirectory + "/" + page;
     }
   }
   return std::string(DEFAULT_ERROR_PAGE);
 }
 
-std::vector<std::string> GetRequest::_getPossiblePaths(
-    const std::string &path,
-    const std::vector<std::string> &index_files) const {
+std::vector<std::string> GetRequest::_getPossiblePaths(const std::string              &path,
+                                                       const std::vector<std::string> &index_files) const {
   std::vector<std::string> possible_paths;
 
-  for (std::vector<std::string>::const_iterator it = index_files.begin();
-       it != index_files.end(); ++it) {
+  for (std::vector<std::string>::const_iterator it = index_files.begin(); it != index_files.end(); ++it) {
     possible_paths.push_back(path + "/" + *it);
   }
 
@@ -209,22 +236,16 @@ std::string GetRequest::_constructPath(const std::string &root) const {
 }
 
 FileType GetRequest::_getFileType(const std::string &path) const {
-  Logger &logger = Logger::getInstance();
+  Logger     &logger = Logger::getInstance();
 
   struct stat buffer;
 
   if (stat(path.c_str(), &buffer) == -1) {
-    logger.log(
-        "[RESPONSE-BUILDING] GetRequest: _fileExists -> File doesn't exist (" +
-            path + ")",
-        VERBOSE);
+    logger.log("[RESPONSE-BUILDING] GetRequest: _fileExists -> File doesn't exist (" + path + ")", VERBOSE);
     return FileType::IS_UNKNOWN;
   }
   if (buffer.st_mode & S_IFDIR) {
-    logger.log(
-        "[RESPONSE-BUILDING] GetRequest: _fileExists -> File is a directory (" +
-            path + ")",
-        VERBOSE);
+    logger.log("[RESPONSE-BUILDING] GetRequest: _fileExists -> File is a directory (" + path + ")", VERBOSE);
     return FileType::IS_DIR;
   }
   if (buffer.st_mode & S_IFREG) {
