@@ -198,7 +198,9 @@ HttpRequest *RequestParser::processChunk(std::string &rawRequest) {
 
   // could add a check for \r\n at the end; if not (single pair) badRequest
   std::string body = unChunk(rawRequest);
-  if (body.size() == 0) return new BadRequest(HTTPStatusCode::BAD_REQUEST);
+  if (body.size() == 0) {
+    return new BadRequest(HTTPStatusCode::BAD_REQUEST);
+  }
   headerData.body = body;
   return new PostRequest(headerData);
 }
