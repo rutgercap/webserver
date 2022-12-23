@@ -57,6 +57,5 @@ std::string HttpResponse::toStr() const {
   if (_body.length() > 0) {
     responseString += _body;
   }
-  logger.debug(responseString);
   return responseString;
 }

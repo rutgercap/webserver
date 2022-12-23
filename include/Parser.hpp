@@ -4,13 +4,15 @@
 #include <Token.hpp>
 #include <Webserver.hpp>
 #include <array>
+#include <iostream>
 #include <map>
 #include <regex>
+#include <sstream>
 #include <string>
 #include <vector>
 
-#define PARSER_FUNC_N 3
-#define BLOCK_FUNC_N 6
+#define PARSER_FUNC_N 2
+#define BLOCK_FUNC_N 7
 
 /* Circle inclusion, so doesn't compile without this parser definition */
 class Parser;

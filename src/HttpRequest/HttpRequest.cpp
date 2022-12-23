@@ -129,8 +129,11 @@ HttpResponse HttpRequest::_handleCgiRequest(std::string const &path,
     logger.error("CGI not allowed on this route");
     return HttpResponse(HTTPStatusCode::METHOD_NOT_ALLOWED);
   }
-
-  HTTPStatusCode status = CGI::executeFile(&body, &headers, path, _body);
+  std::string cgiBody = _body;
+  if (route.maxBodySize != 0 && _body.length() > route.maxBodySize) {
+    cgiBody = _body.substr(0, route.maxBodySize);
+  }
+  HTTPStatusCode status = CGI::executeFile(&body, &headers, path, cgiBody);
   if (status != HTTPStatusCode::OK) {
     Logger::getInstance().error("Executing cgi: " +
                                 getMessageByStatusCode(status));
@@ -229,11 +232,8 @@ HttpResponse HttpRequest::_responseWithBody(
     std::map<std::string, std::string> headers, std::string body) const {
   HttpResponse response(HTTPStatusCode::OK);
   response.setBody(body);
-  Logger::getInstance().debug(body);
   for (std::map<std::string, std::string>::const_iterator it = headers.begin();
        it != headers.end(); ++it) {
-    Logger::getInstance().debug(it->first);
-    Logger::getInstance().debug(it->second);
     response.setHeader(it->first, it->second);
   }
   return response;

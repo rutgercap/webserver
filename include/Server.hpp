@@ -26,8 +26,6 @@
 #define DEFAULT_HOST_STATUS 420
 #define DEFAULT_HOST_PATH "index.html"
 
-#define DEFAULT_MAX_BODY 1000000
-
 #define DEFAULT_HOST "0.0.0.0"
 #define DEFAULT_PORT 80
 
@@ -38,7 +36,8 @@ struct Route {
       : route(name),
         defaultFile("index.html"),
         autoIndex(false),
-        cgiEnabled(false) {
+        cgiEnabled(false),
+        maxBodySize(0) {
     allowedMethods[GET] = true;
     allowedMethods[POST] = true;
     allowedMethods[DELETE] = true;
@@ -48,7 +47,8 @@ struct Route {
       : route("/"),
         defaultFile("index.html"),
         httpRedirection(""),
-        cgiEnabled(false) {
+        cgiEnabled(false),
+        maxBodySize(0) {
     allowedMethods[GET] = true;
     allowedMethods[POST] = true;
     allowedMethods[DELETE] = true;
@@ -63,6 +63,7 @@ struct Route {
   std::string httpRedirection;
   bool autoIndex;
   bool cgiEnabled;
+  size_t maxBodySize;
 };
 
 struct PageData {
@@ -80,20 +81,15 @@ class Server {
   std::string getServerName() const;
   std::vector<Route> getRoutes() const;
   PageData getErrorPage() const;
-  int getMaxBody() const;
   int getPort() const;
   int setPort(int const &value);
   int setErrorPage(int const &statusCode, std::string const &filePath);
   void setServerName(std::string const &value);
-  int setMaxBody(double const &value);
   void addRoute(Route const &route);
   const Route &getRoute(const std::string &uri) const;
-  // int                setHost(int const &statusCode, std::string const
-  // &filePath);
 
  private:
   int _port;
-  int _maxBodySize;
   std::string _serverName;
   std::vector<Route> _routes;
   PageData _defaultErrorPage;

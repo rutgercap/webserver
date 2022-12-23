@@ -28,7 +28,6 @@ void testCgi() {
   Logger &logger = Logger::getInstance();
 
   logger.log(getMessageByStatusCode(status));
-  logger.debug(body);
 }
 
 int main(int argc, char **argv) {

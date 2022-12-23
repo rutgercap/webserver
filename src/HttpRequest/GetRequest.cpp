@@ -24,7 +24,6 @@ HttpResponse GetRequest::_handleCgiRequest(std::string const &path,
   return _responseWithBody(headers, body);
 }
 
-#define DEFAULT_ERROR_PAGE "root/error_pages/404/index.html"
 std::string GetRequest::_getErrorPage(const Route &route,
                                       HTTPStatusCode errorCode) const {
   if (route.errorPages.find(errorCode) != route.errorPages.end()) {
@@ -33,12 +32,14 @@ std::string GetRequest::_getErrorPage(const Route &route,
       return route.rootDirectory + page;
     }
   }
-  // TODO: fix hardcode
-  return std::string(DEFAULT_ERROR_PAGE);
+  return "";
 }
 
 HttpResponse GetRequest::_errorResponse(HTTPStatusCode const &statusCode,
                                         Route const &route) const {
   std::string pathToErrorFile = _getErrorPage(route, statusCode);
+  if (pathToErrorFile.empty()) {
+    return HttpResponse(HTTPStatusCode::NOT_FOUND);
+  }
   return _responseWithFile(pathToErrorFile, statusCode);
 }
