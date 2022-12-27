@@ -26,23 +26,31 @@ int Server::getPort() const { return _port; }
 
 std::vector<Route> Server::getRoutes() const { return _routes; }
 
+static int matchValue(const std::string &option, const std::string &uri) {
+  std::string urilong = uri.back() == '/' ? uri : uri + "/";
+  while (urilong.size()) {
+    if (option.size() > urilong.size()) return 0;
+    if (urilong == option) return (option.size());
+    size_t find = urilong.rfind('/', urilong.size() - 2);
+    if (find == std::string::npos) return (0);
+    urilong = urilong.substr(0, find + 1);
+  }
+  return 0;
+}
+
 // Possible TODO: look for longest matching route
 const Route &Server::getRoute(const std::string &uri) const {
+  const Route *match = &_routes[0];
+  int value = 0;
   for (std::vector<Route>::const_iterator it = _routes.begin();
        it != _routes.end(); it++) {
     const Route &route = *it;
-    if (route.route == uri) {
-      return route;
+    if (matchValue(route.route, uri) > value) {
+      match = &route;
+      value = route.route.size();
     }
   }
-  for (std::vector<Route>::const_iterator it = _routes.begin();
-       it != _routes.end(); it++) {
-    const Route &route = *it;
-    if (route.route == "/") {
-      return route;
-    }
-  }
-  return _routes[0];
+  return *match;
 }
 
 void Server::setServerName(std::string const &value) { _serverName = value; }

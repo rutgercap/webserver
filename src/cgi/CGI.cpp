@@ -2,50 +2,52 @@
 
 #include <CGI.hpp>
 
-/**************************************************/
-/* Constructors / destructors		 	          */
-/**************************************************/
 CGI::CGI() {}
 
 CGI::~CGI() {}
 
-/**************************************************/
-/* CGI methods						 	          */
-/**************************************************/
-
-/* Child process that executes CGI file */
-int CGI::_forkCgiFile(int fd[2], std::string const &filePath,
-                      std::string const &body) {
-  Logger &logger = Logger::getInstance();
-
-  char *argv[] = {const_cast<char *>(PATH_TO_PYTHON),
-                  const_cast<char *>(filePath.c_str()),
-                  const_cast<char *>(body.c_str()), NULL};
-
-  close(fd[READ]);
-  if (dup2(fd[WRITE], STDOUT_FILENO) == -1) {
-    logger.error("[EXECUTING] CGI: dup2: " + std::string(strerror(errno)));
-    close(fd[WRITE]);
-    exit(1);
+static char *const *strlist(const std::vector<const std::string> &input) {
+  char **result = new char *[input.size() + 1];
+  std::size_t storage_size = 0;
+  for (auto const &s : input) {
+    storage_size += s.size() + 1;
   }
-  if (dup2(fd[WRITE], STDERR_FILENO) == -1) {
-    logger.error("[EXECUTING] CGI: dup2: " + std::string(strerror(errno)));
-    close(fd[WRITE]);
-    exit(1);
+
+  try {
+    char *storage = new char[storage_size];
+    char *p = storage;
+    char **q = result;
+    for (auto const &s : input) {
+      *q++ = std::strcpy(p, s.c_str());
+      p += s.size() + 1;
+    }
+    *q = nullptr;  // terminate the list
+
+    return result;
+  } catch (...) {
+    delete[] result;
+    throw;
   }
-  if (execve(PATH_TO_PYTHON, static_cast<char *const *>(argv), environ)) {
-    logger.error("[EXECUTING] CGI: execve: " + std::string(strerror(errno)));
-    close(fd[WRITE]);
-    exit(1);
-  }
-  return 1;
 }
 
-int CGI::_forkCgiFile(int fd[2], std::string const &filePath) {
-  Logger &logger = Logger::getInstance();
+static char *const *makeArgv(const std::string &filePath,
+                             std::vector<std::string> cgiParams) {
+  const char *path = PATH_TO_PYTHON;
+  std::vector<const std::string> argVector = {path, filePath.c_str()};
+  if (cgiParams.empty()) {
+    return strlist(argVector);
+  }
+  argVector.reserve(argVector.size() + cgiParams.size());
+  for (std::vector<std::string>::iterator it = cgiParams.begin();
+       it != cgiParams.end(); it++) {
+    argVector.push_back(it->c_str());
+  }
+  return strlist(argVector);
+}
 
-  char *argv[] = {const_cast<char *>(PATH_TO_PYTHON),
-                  const_cast<char *>(filePath.c_str()), NULL};
+/* Child process that executes CGI file */
+int CGI::_forkCgiFile(int fd[2], char *const *argv) {
+  Logger &logger = Logger::getInstance();
 
   close(fd[READ]);
   if (dup2(fd[WRITE], STDOUT_FILENO) == -1) {
@@ -58,7 +60,7 @@ int CGI::_forkCgiFile(int fd[2], std::string const &filePath) {
     close(fd[WRITE]);
     exit(1);
   }
-  if (execve(PATH_TO_PYTHON, static_cast<char *const *>(argv), environ)) {
+  if (execve(PATH_TO_PYTHON, argv, environ)) {
     logger.error("[EXECUTING] CGI: execve: " + std::string(strerror(errno)));
     close(fd[WRITE]);
     exit(1);
@@ -181,43 +183,27 @@ static HTTPStatusCode parseCgiOutput(
   return HTTPStatusCode::OK;
 }
 
-/* CGI control flow */
-HTTPStatusCode CGI::executeFile(std::string *pBody,
-                                std::map<std::string, std::string> *pHeaders,
-                                std::string const &filePath,
-                                std::string const &body) {
+HTTPStatusCode CGI::executeCgi(std::string *pBody,
+                               std::map<std::string, std::string> *pHeaders,
+                               char *const *argv) {
   Logger &logger = Logger::getInstance();
-  HTTPStatusCode status = HTTPStatusCode::OK;
   std::string buffer;
   int fd[2];
   pid_t pid;
 
   logger.log("[STARTING] CGI ", VERBOSE);
-  status = checkFileAccess(filePath);
-  if (status != HTTPStatusCode::OK) {
-    logger.error("No file access for cgi request");
-    return status;
-  }
-
-  /* Open pipe */
   if (pipe(fd) == -1) {
     throw std::runtime_error("[PREPARING] CGI: pipe: " +
                              std::string(strerror(errno)));
   }
 
-  /* Start fork */
   pid = fork();
   if (pid == -1) {
     throw std::runtime_error("[PREPARING] CGI: fork: " +
                              std::string(strerror(errno)));
   } else if (pid == CHILD) {
-    /* Child process */
-    if (_forkCgiFile(fd, filePath, body)) {
-      throw std::runtime_error("[EXECUTING] CGI: " +
-                               std::string(strerror(errno)));
-    }
+    _forkCgiFile(fd, argv);
   } else {
-    /* Parent process */
     close(fd[WRITE]);
     if (readFromChildProcess(&buffer, pid, fd[READ])) {
       return HTTPStatusCode::INTERNAL_SERVER_ERROR;
@@ -228,43 +214,35 @@ HTTPStatusCode CGI::executeFile(std::string *pBody,
 
 HTTPStatusCode CGI::executeFile(std::string *pBody,
                                 std::map<std::string, std::string> *pHeaders,
+                                const std::vector<std::string> &cgiParams,
                                 std::string const &filePath) {
   Logger &logger = Logger::getInstance();
-  HTTPStatusCode status = HTTPStatusCode::OK;
-  std::string buffer;
-  int fd[2];
-  pid_t pid;
 
-  logger.log("[STARTING] CGI ", VERBOSE);
-  status = checkFileAccess(filePath);
+  HTTPStatusCode status = checkFileAccess(filePath);
   if (status != HTTPStatusCode::OK) {
     logger.error("No file access for cgi request");
     return status;
   }
 
-  /* Open pipe */
-  if (pipe(fd) == -1) {
-    throw std::runtime_error("[PREPARING] CGI: pipe: " +
-                             std::string(strerror(errno)));
+  std::vector<std::string> notConstFuckingVector = cgiParams;
+  char *const *argv = makeArgv(filePath, notConstFuckingVector);
+  return executeCgi(pBody, pHeaders, argv);
+}
+
+HTTPStatusCode CGI::executeFileWithBody(
+    std::string *pBody, std::map<std::string, std::string> *pHeaders,
+    const std::vector<std::string> &cgiParams, std::string const &filePath,
+    std::string const &body) {
+  Logger &logger = Logger::getInstance();
+
+  HTTPStatusCode status = checkFileAccess(filePath);
+  if (status != HTTPStatusCode::OK) {
+    logger.error("No file access for cgi request");
+    return status;
   }
 
-  /* Start fork */
-  pid = fork();
-  if (pid == -1) {
-    throw std::runtime_error("[PREPARING] CGI: fork: " +
-                             std::string(strerror(errno)));
-  } else if (pid == CHILD) {
-    /* Child process */
-    if (_forkCgiFile(fd, filePath)) {
-      throw std::runtime_error("[EXECUTING] CGI: " +
-                               std::string(strerror(errno)));
-    }
-  } else {
-    /* Parent process */
-    close(fd[WRITE]);
-    if (readFromChildProcess(&buffer, pid, fd[READ])) {
-      return HTTPStatusCode::INTERNAL_SERVER_ERROR;
-    }
-  }
-  return parseCgiOutput(pBody, pHeaders, buffer);
+  std::vector<std::string> vectorWithBody = cgiParams;
+  vectorWithBody.push_back(body);
+  char *const *argv = makeArgv(filePath, vectorWithBody);
+  return executeCgi(pBody, pHeaders, argv);
 }

@@ -24,20 +24,21 @@
 class CGI {
  public:
   /* Can execute file with body */
-  static HTTPStatusCode executeFile(
+  static HTTPStatusCode executeFileWithBody(
       std::string *pBody, std::map<std::string, std::string> *pHeaders,
-      std::string const &filePath, std::string const &body);
+      const std::vector<std::string> &cgiParams, std::string const &filePath,
+      std::string const &body);
   /* Or without */
   static HTTPStatusCode executeFile(
       std::string *pBody, std::map<std::string, std::string> *pHeaders,
-      std::string const &filePath);
+      const std::vector<std::string> &cgiParams, std::string const &filePath);
 
  protected:
-  /* With body */
-  static int _forkCgiFile(int fd[2], std::string const &filePath,
-                          std::string const &body);
-  /* Without body */
-  static int _forkCgiFile(int fd[2], std::string const &filePath);
+  static int _forkCgiFile(int fd[2], char *const *argv);
+
+  static HTTPStatusCode executeCgi(std::string *pBody,
+                                   std::map<std::string, std::string> *pHeaders,
+                                   char *const *argv);
 
  private:
   CGI();

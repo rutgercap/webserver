@@ -12,7 +12,7 @@
 #include <vector>
 
 #define PARSER_FUNC_N 2
-#define BLOCK_FUNC_N 7
+#define BLOCK_FUNC_N 8
 
 /* Circle inclusion, so doesn't compile without this parser definition */
 class Parser;
@@ -83,6 +83,7 @@ class Parser {
   int parseAutoIndex(void *dest, t_dataLine line);
   int parseIndex(void *dest, t_dataLine line);
   int parseCgi(void *dest, t_dataLine line);
+  int parseCgiParam(void *dest, t_dataLine line);
   int parseMethods(void *dest, t_dataLine line);
   /* table with key value pairs for parsing AST */
   static t_parseFuncPair lineParsingFuncs[PARSER_FUNC_N];

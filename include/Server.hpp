@@ -53,13 +53,13 @@ struct Route {
     allowedMethods[POST] = true;
     allowedMethods[DELETE] = true;
   }
-  // Vector for bonus
   std::string route;
   std::string rootDirectory;
   std::string defaultFile;
   std::map<HTTPStatusCode, std::string> errorPages;
   std::map<EHttpMethods, bool> allowedMethods;
   std::vector<std::string> indexFiles;
+  std::vector<std::string> cgiParams;
   std::string httpRedirection;
   bool autoIndex;
   bool cgiEnabled;

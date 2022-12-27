@@ -14,7 +14,8 @@ HttpResponse GetRequest::_handleCgiRequest(std::string const &path,
   if (!route.cgiEnabled) {
     return _errorResponse(HTTPStatusCode::METHOD_NOT_ALLOWED, path);
   }
-  HTTPStatusCode status = CGI::executeFile(&body, &headers, path);
+  HTTPStatusCode status =
+      CGI::executeFile(&body, &headers, route.cgiParams, path);
 
   if (status != HTTPStatusCode::OK) {
     Logger::getInstance().error("Executing cgi: " +

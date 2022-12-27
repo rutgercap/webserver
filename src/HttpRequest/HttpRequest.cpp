@@ -133,7 +133,8 @@ HttpResponse HttpRequest::_handleCgiRequest(std::string const &path,
   if (route.maxBodySize != 0 && _body.length() > route.maxBodySize) {
     cgiBody = _body.substr(0, route.maxBodySize);
   }
-  HTTPStatusCode status = CGI::executeFile(&body, &headers, path, cgiBody);
+  HTTPStatusCode status =
+      CGI::executeFileWithBody(&body, &headers, route.cgiParams, path, cgiBody);
   if (status != HTTPStatusCode::OK) {
     Logger::getInstance().error("Executing cgi: " +
                                 getMessageByStatusCode(status));

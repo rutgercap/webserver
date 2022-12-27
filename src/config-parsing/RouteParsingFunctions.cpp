@@ -12,8 +12,22 @@ t_parseFuncPair Parser::blockParsingFuncs[BLOCK_FUNC_N] = {
     {"methods", &Parser::parseMethods},
     {"errorPage", &Parser::parseErrorPage},
     {"cgi", &Parser::parseCgi},
+    {"cgi_param", &Parser::parseCgiParam},
     {"maxBodySize", &Parser::parseMaxBodySize},
 };
+
+int Parser::parseCgiParam(void *dest, t_dataLine line) {
+  if (!dest || line.size() < 2) {
+    Logger::getInstance().error("[CONFIG PARSER]: Invalid index directive");
+    return 1;
+  }
+  Route *route = static_cast<Route *>(dest);
+
+  for (std::size_t i = 1; i < line.size(); i++) {
+    route->cgiParams.push_back(line.at(i));
+  }
+  return 0;
+}
 
 int Parser::parseMaxBodySize(void *dest, t_dataLine line) {
   if (!dest || line.size() != 2) {
