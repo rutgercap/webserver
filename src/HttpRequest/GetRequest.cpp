@@ -54,16 +54,14 @@ HttpResponse GetRequest::_handleFileRequest(std::string const &path, Route const
       if (_typeIsAccepted() == false) {
         return _errorResponseWithFile(HTTPStatusCode::NOT_ACCEPTABLE, route);
       }
+      if (route.autoIndex == true) {
+        return _responseWithAutoIndex(path);
+      }
       std::vector<std::string> possible_paths = _getPossiblePaths(path, route.indexFiles);
       for (std::vector<std::string>::const_iterator it = possible_paths.begin(); it != possible_paths.end(); ++it) {
         if (_getFileType(*it) == FileType::IS_REG_FILE) {
           return _responseWithFile(*it, HTTPStatusCode::OK);
         }
-      }
-      if (route.autoIndex == true) {
-        return _responseWithAutoIndex(path);
-      } else {
-        return _errorResponseWithFile(HTTPStatusCode::FORBIDDEN, route);
       }
     }
     case FileType::IS_REG_FILE: {
@@ -81,8 +79,6 @@ HttpResponse GetRequest::_handleFileRequest(std::string const &path, Route const
   }
 }
 
-#include "dirent.h"
-
 HttpResponse GetRequest::_responseWithAutoIndex(std::string const &path) const {
   HttpResponse response(HTTPStatusCode::OK);
   std::string  body;
@@ -90,13 +86,25 @@ HttpResponse GetRequest::_responseWithAutoIndex(std::string const &path) const {
   struct dirent *ent;
 
   body += "<!DOCTYPE html><html><head><title>Index of " + path + "</title></head><body><h1>Index of " + path + "</h1><table>";
-  body += "<tr><th>Name</th></tr>"; // can add more columns here
+  body += "<tr><th>Type</th><th>Name</tr>"; // can add more columns here
 
   if ((dir = opendir(path.c_str())) != NULL) {
     while ((ent = readdir(dir)) != NULL) {
-      // convert dir to string
 
-      body += "<tr><td><a href=\"" + std::string(ent->d_name) + "/index.html" + "\">" + std::string(ent->d_name) + "</a></td></tr>";
+      if (std::string(ent->d_name) == "." || std::string(ent->d_name) == "..") {
+        continue;
+      }
+
+      body += "<tr>";
+
+      if (ent->d_type == DT_DIR) {
+        body += "<td>Directory</td>";
+      } else {
+        body += "<td>File</td>";
+      }
+      body += "<td><a href=\"" + _uri + "/" + std::string(ent->d_name) + "/" + "\">" + std::string(ent->d_name) + "</a></td>";
+
+      body += "</tr>";
     }
     closedir(dir);
   } else {
@@ -226,8 +234,28 @@ std::vector<std::string> GetRequest::_getPossiblePaths(const std::string        
 std::string GetRequest::_constructPath(const std::string &root) const {
   std::string fullPath;
 
+  Logger &logger = Logger::getInstance();
+  logger.log("[RESPONSE-BUILDING] GetRequest: _constructPath -> _uri: " + _uri);
+
+
+  // if _uri already contains the root, we don't need to add it again
+  if (_uri.find(root) != std::string::npos) {
+    logger.log("[RESPONSE-BUILDING] GetRequest: _constructPath -> _uri already contains root: " + _uri);
+    return _uri.substr(1);
+  }
+
+  
+
   // eg: root = "root/", _uri = "/index.html"
   // => full_path = "root/index.html"
+  // if (root.empty()) {
+  //   fullPath = _uri;
+  // } else if (_uri[0] == '/') {
+  //   fullPath = _uri.substr(1);
+  //   logger.log("[RESPONSE-BUILDING] GetRequest: _constructPath -> fullPath: " + fullPath);
+  //   return fullPath;
+  // }
+
   if (!root.empty()) {
     return root + _uri;
   } else {

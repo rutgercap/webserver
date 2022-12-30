@@ -8,6 +8,7 @@
 #include <Webserver.hpp>
 #include <string>
 #include <vector>
+#include <dirent.h>
 
 #include "HttpMessage.hpp"
 #include "HttpResponse.hpp"
