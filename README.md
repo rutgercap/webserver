@@ -6,7 +6,7 @@ This is a web server that behaves similar to NGINX, a popular open-source web se
 
 * Supports HTTP/1.1
 * Serve static files (HTML, CSS, JavaScript, images, etc.)
-* Reverse proxy requests to other servers
+* Supports multiple virtual servers to reverse proxy requests to other servers
 * Supports python CGI scripts
 
 
